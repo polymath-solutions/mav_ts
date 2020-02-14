@@ -1,0 +1,40 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "app",
+    srcs = ["index.js", "lib.js"],
+    data = [
+        # "@npm//is-builtin-module",
+        # "@npm//rollup",
+        # "@npm//rollup-plugin-babel",
+        # "@npm//rollup-plugin-commonjs",
+        # "@npm//rollup-plugin-includepaths",
+        "@npm//@rollup/plugin-node-resolve",
+        # "@npm//rollup-plugin-sourcemaps",
+        # "@npm//rollup-plugin-replace",
+        "@npm//rollup-plugin-terser",
+        # "@npm//@babel/plugin-transform-react-jsx",
+        # "@npm//@babel/core",
+        # "@npm//@babel/preset-react",
+    ],
+)
+
+load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
+
+rollup_bundle(
+    name = "bundle",
+    srcs = [":app"],
+    entry_point = "index.js",
+    deps = [
+        "@npm//lodash",
+        "@npm//@rollup/plugin-node-resolve",
+        "@npm//rollup-plugin-terser",
+    ],
+    config_file = "rollup.config.js",
+)
+
+# terser_minified(
+#     name = "out.min",
+#     src = ":app",
+# #    config_file = "terser_config.json",
+# )

@@ -1,0 +1,92 @@
+#!/bin/bash
+# © 2019 Polymath Solutions
+
+# Ehi Emacs, this is -*- shell-script -*-
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+find_workspace_top() ( # runs in a subshell, not to disturb CWD
+    CWD=${PWD}
+    if [ ! -f WORKSPACE ]; then
+	cd ..
+	if [[ "${PWD}" == "${CWD}" ]]; then
+	    echo "Cannot run bazel outside of a workspace"
+	    exit 1
+	fi
+	find_workspace
+    fi
+    echo "${PWD}"
+)
+
+extract_workspace_var() {
+    local workspace_top=$1
+    local var_name=$2
+    # TODO(mav) use a single sed to grab the value
+    # shellcheck disable=SC2046,SC2005,SC2196,SC1117
+    echo $(egrep "^${var_name}\s*=\s*" < "${workspace_top}/WORKSPACE" | sed -e 's/.*=//g' -e 's/ //g' -e 's/"//g')
+}
+
+build_and_install_bazel() ( # runs in a subshell, not to disturb CWD
+    local bazel_bin_dir=$1
+    local bazel_version=$2
+    local bazel_version_sha=$3
+    local bazel_zip_path=$4
+    local zip_archive="bazel-${bazel_version}-dist.zip"
+    local BUILD_DIR
+
+    BUILD_DIR=$(mktemp -d)
+    # shellcheck disable=SC2181
+    if [[ $? != 0 ]]; then
+	echo "Cannot create temp directory for building bazel, bailing out"
+	exit 2
+    fi
+    # shellcheck disable=SC2064
+    trap "rm -rf ${BUILD_DIR}" EXIT
+
+    cd "${BUILD_DIR}"
+
+    if [ -z "${bazel_zip_path}" ]; then
+	bazel_zip_path="https://github.com/bazelbuild/bazel/releases/download/${bazel_version}/${zip_archive}"
+    fi
+    echo -n "Downloading bazel ${bazel_version}..."
+    curl -O -L "${bazel_zip_path}" > /dev/null 2>&1
+    echo "done"
+    local download_sha
+    download_sha=$(sha256sum "${zip_archive}" | cut -d ' ' -f 1)
+    if [[ "${download_sha}" != "${bazel_version_sha}" ]]; then
+	echo "SHA checksum mismatch:"
+	echo "    expected: ${bazel_version_sha}"
+	echo "    download: ${download_sha}"
+	echo "bailing out"
+	exit 3
+    fi
+    echo -n "Building bazel..."
+    unzip "${zip_archive}" > /dev/null
+    ./compile.sh > /dev/null
+    mv output/bazel "${bazel_bin_dir}"
+    echo "done"
+)
+
+WORKSPACE_TOP=$(find_workspace_top)
+
+BAZEL_VERSION=$(extract_workspace_var "${WORKSPACE_TOP}" BAZEL_VERSION)
+BAZEL_VERSION_SHA=$(extract_workspace_var "${WORKSPACE_TOP}" BAZEL_VERSION_SHA)
+BAZEL_ZIP_PATH=$(extract_workspace_var "${WORKSPACE_TOP}" BAZEL_ZIP_PATH)
+
+# TODO(mav) check for bazel version
+BAZEL_BIN_DIR="${HOME}/.bazel/${BAZEL_VERSION}"
+
+echo "worskspace: ${WORKSPACE_TOP}"
+echo "cwd: ${PWD}"
+echo "bazel version: ${BAZEL_VERSION}"
+echo "bazel sha: ${BAZEL_VERSION_SHA}"
+
+mkdir -p "${BAZEL_BIN_DIR}"
+
+if [ ! -f "${BAZEL_BIN_DIR}/bazel" ]; then
+    build_and_install_bazel "${BAZEL_BIN_DIR}" "${BAZEL_VERSION}" "${BAZEL_VERSION_SHA}" "${BAZEL_ZIP_PATH}"
+fi
+
+exec "$BAZEL_BIN_DIR/bazel" "$@"

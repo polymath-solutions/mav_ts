@@ -1,0 +1,16 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+
+# running a binary from local source
+nodejs_binary(
+    name = "app",
+    data = [
+        "index.js",
+        "lib.js",
+        "@npm//lodash",
+    ],
+    entry_point = "index.js",
+#    entry_point = "mav_ts/js/index.js",
+    install_source_map_support = False,
+)
